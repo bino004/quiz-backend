@@ -368,6 +368,45 @@ app.delete("/api/attempts/:id", verifyToken, async (req, res) => {
   }
 });
 
+app.post("/api/google-login", async (req, res) => {
+  try {
+    const { name, email } = req.body;
+
+    let user = await pool.query("SELECT * FROM users WHERE email=$1", [email]);
+
+    if (user.rows.length === 0) {
+      const newUser = await pool.query(
+        `INSERT INTO users
+        (name, email, password, role)
+        VALUES ($1,$2,$3,$4)
+        RETURNING *`,
+        [name, email, null, "user"],
+      );
+
+      user = { rows: [newUser.rows[0]] };
+    }
+
+    const token = jwt.sign(
+      {
+        id: user.rows[0].id,
+        role: user.rows[0].role,
+      },
+      SECRET_KEY,
+      { expiresIn: "7d" },
+    );
+
+    res.json({
+      token,
+      user: user.rows[0],
+    });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({
+      message: err.message,
+    });
+  }
+});
+
 app.listen(process.env.PORT || 5000, () => {
   console.log("Server running");
 });
