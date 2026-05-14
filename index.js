@@ -372,35 +372,48 @@ app.post("/api/google-login", async (req, res) => {
   try {
     const { name, email } = req.body;
 
-    let user = await pool.query("SELECT * FROM users WHERE email=$1", [email]);
+    // check user exists
+    let result = await pool.query("SELECT * FROM users WHERE email=$1", [
+      email,
+    ]);
 
-    if (user.rows.length === 0) {
+    let user = result.rows[0];
+
+    // create user if not exists
+    if (!user) {
       const newUser = await pool.query(
-        `INSERT INTO users
+        `INSERT INTO users 
         (name, email, password, role)
-        VALUES ($1,$2,$3,$4)
+        VALUES ($1, $2, $3, $4)
         RETURNING *`,
         [name, email, null, "user"],
       );
 
-      user = { rows: [newUser.rows[0]] };
+      user = newUser.rows[0];
     }
 
+    // generate JWT
     const token = jwt.sign(
       {
-        id: user.rows[0].id,
-        role: user.rows[0].role,
+        id: user.id,
+        role: user.role,
       },
-      SECRET_KEY,
+      process.env.JWT_SECRET,
       { expiresIn: "7d" },
     );
 
     res.json({
       token,
-      user: user.rows[0],
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
     });
   } catch (err) {
-    console.log(err);
+    console.log("GOOGLE LOGIN ERROR:", err.message);
+
     res.status(500).json({
       message: err.message,
     });
