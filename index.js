@@ -155,13 +155,13 @@ app.post("/api/reset-password", async (req, res) => {
 
 app.post("/api/quizzes", verifyToken, adminOnly, async (req, res) => {
   try {
-    const { title, description, level } = req.body;
+    const { title, description, level, timer } = req.body;
 
     const result = await pool.query(
-      `INSERT INTO quizzes (title, description, level)
-       VALUES ($1, $2, $3)
+      `INSERT INTO quizzes (title, description, level, timer)
+       VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [title, description, level],
+      [title, description, level, timer],
     );
 
     res.json(result.rows[0]);
@@ -173,14 +173,14 @@ app.post("/api/quizzes", verifyToken, adminOnly, async (req, res) => {
 
 app.put("/api/quizzes/:id", verifyToken, adminOnly, async (req, res) => {
   try {
-    const { title, description, level } = req.body;
+    const { title, description, level, timer } = req.body;
 
     const result = await pool.query(
       `UPDATE quizzes
-       SET title=$1, description=$2, level=$3
-       WHERE id=$4
+       SET title=$1, description=$2, level=$3, timer=$4
+       WHERE id=$5
        RETURNING *`,
-      [title, description, level, req.params.id],
+      [title, description, level, timer, req.params.id],
     );
 
     res.json(result.rows[0]);
@@ -305,18 +305,26 @@ app.delete("/api/questions/:id", verifyToken, adminOnly, async (req, res) => {
   }
 });
 
-app.get(
-  "/api/quizzes/:id/questions",
-  verifyToken,
-  async (req, res) => {
-    const result = await pool.query(
+app.get("/api/quizzes/:id/questions", verifyToken, async (req, res) => {
+  try {
+    const quizResult = await pool.query("SELECT * FROM quizzes WHERE id=$1", [
+      req.params.id,
+    ]);
+
+    const questionsResult = await pool.query(
       "SELECT * FROM questions WHERE quiz_id=$1",
       [req.params.id],
     );
 
-    res.json(result.rows);
-  },
-);
+    res.json({
+      quiz: quizResult.rows[0],
+      questions: questionsResult.rows,
+    });
+  } catch (err) {
+    console.log("GET QUESTIONS ERROR:", err.message);
+    res.status(500).json({ message: err.message });
+  }
+});
 
 app.get("/api/user/:id/attempts", verifyToken, async (req, res) => {
   try {
